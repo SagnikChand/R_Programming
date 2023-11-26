@@ -9,3 +9,6 @@ editor: visual
 Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
 
 The last movie that I watched in a theater was Brahmastra. It was a pretty good movie with great VFX and animations in it.
+
+
+I am thinking about cooking up some Rice and Curry for lunch today.
