@@ -1,0 +1,388 @@
+---
+title: "Challenge_3: Joining Relational Data, Writing Your Own Functions, and String Operations"
+author: "Sagnik Chand"
+description: "This is the 3rd weeekly assignment and we are learning to join data sets, writing our own functions and using string operations with stringr package"
+date: "10/4/2023"
+format:
+  html:
+    df-print: paged
+    css: "styles.css"
+    embed-resources: true
+    self-contained-math: true
+categories:
+  - weekly_challenges
+  - challenge_3
+---
+
+**Make sure you change the author's name in the above YAML header.**
+
+## Setup
+
+If you have not installed the following packages, please install them before loading them.
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(readxl)
+library(haven) #for loading other datafiles (SAS, STATA, SPSS, etc.)
+library(stringr) # if you have not installed this package, please install it.
+library(lubridate)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+## Challenge Overview
+
+In this challenge, we will practice `join()` with relational data. We will also explore some string functions to process, extract information, and mutate and clean data.
+
+There will be coding components and writing components. Please read the instructions for each part and complete your challenges.
+
+## Datasets
+
+There are four datasets provided in this challenge. Please download the following dataset files from Canvas or Google Classroom and save them to a folder within your project working directory (i.e.: "yourworkingdiectory_data"). If you don't have a folder to store the datasets, please create one.
+
+-   Part 1 and 2: ESS_5.dta and p5v2018.sav (used in Challenge#1) ⭐⭐
+-   Part 3: babynames.csv (used in Challenge#1) ⭐
+-   Part 4: australian_marriage_law_postal_survey_2017\_-\_response_final.xls ⭐⭐⭐
+
+Find the `_data` folder, then use the correct R command to read the datasets.
+
+## Part 1. Joining Individual-level and Country-Level Data
+
+We have been working with these two datasets in the previous two challenges and should be familiar with one. Suppose we have a research project that studies European citizens' social behaviors and public opinions, and we are interested in how the countries that respondents live in influence their behavior and opinion. In this case, we will need to combine the two data for future analysis.
+
+1.  **Read the two raw datasets.**
+
+    **For ESS_5: (1) keep only the following columns:** *idno, essround, male, age, edu, eth_major, income_10, cntry, vote**.*** **(2)** recode *essround* to 2010, and rename it as *year*.
+
+    **For Polity V, keep the first 10 columns.**
+
+```{r}
+# Reading in the ESS data set, selecting required columns, recoding, and renaming "essround" column.
+
+Ess <- read_dta("ESS_5.dta")
+Ess <- Ess %>% 
+  select(idno, essround, male, age, edu, eth_major, income_10, cntry, vote) %>% 
+  mutate(essround = recode(essround, "5" = "2010"))
+
+# Reading in the Polity V data set, and selecting required columns.
+
+Pol <- read_sav("p5v2018.sav")
+Pol <- Pol %>% 
+  select(1:10)
+
+```
+
+2.  **Answer the following questions:**
+
+    \(1\) In this project, which is the primary data, and which is the foreign data?
+
+    Ans: The ESS survey data set is the primary data and the Polity V data set is the foreign data.
+
+    \(2\) What is(are) the key(s) for the two data?
+
+    Ans: For the Polity V data set the column "cyear" is the primary key and "Country", "Year" are the foreign keys. For the Ess survey data set the column "idno" is the primary key and "cntry", "year" are foreign keys.
+
+3.  **Suppose we have a theory that a country's level of democracy (*democ* in Polity V) affects an individual's electoral participation (*vote* in ESS 5). We must first conduct some necessary data transformation before merging the two data.**
+
+    \(1\) Countries in ESS_5 are coded with their 2-digit codes (ISO-3166-1) in the *cntry* column. It is difficult to identify from these two-letter abbreviations. Let's first transform the *cntry* column by changing it from the abbreviations to the full country names and renaming the column as *country.*
+
+    Please refer to [this website](https://datahub.io/core/country-list) for the list of countries with their 2-letter abbreviations. There are two ways to accomplish this task, and you can choose either one:
+
+    a.  manually recode each country abbreviation to its full name or
+
+    b.  download the [country list (csv) file](https://datahub.io/core/country-list/r/data.csv) from the above website, import it in RStudio, and merge it with the ESS_5 data. By doing so, you automatically join a new "country" column to the existing ESS_5 data.
+
+    ```{r}
+    # Importing the country code data set. 
+
+    c_code <- read_csv("https://datahub.io/core/country-list/r/data.csv")
+
+    # Renaming, joining, and relocating the country code data set with ESS data set.
+
+    Ess <- Ess %>% 
+      rename("Code" = "cntry")
+
+    Ess <- left_join(Ess, c_code, by = "Code")
+
+    Ess <- Ess %>% 
+      rename("country" = "Name") %>% 
+      relocate(country, .before = male)
+
+    ```
+
+    \(2\) What column(s) will we use as a matching key(s) for combining the two data? Note: you can use multiple matching strategies, but I suggest we create a common matching key for both data if there are none.
+
+    Ans: We can generate a new column called "cnt_year" for the data sets. This column will contain country names and year values which we can use to join these data sets.
+
+    \(3\) Join the two data (ESS_5 and Polity V). Please print the first few entries as a sanity check. Name the joined data as "ESS_Polity"
+
+    ```{r}
+    # Generating a new column called "cnt_year" using the "country" and "year" column.
+
+    Ess <- Ess %>% 
+      mutate( cnt_year = str_c(country, essround, sep = " ")) %>% 
+      relocate(cnt_year, .before = essround)
+
+    Pol <- Pol %>% 
+      mutate( cnt_year = str_c(country, year, sep = " ")) %>% 
+      relocate(cnt_year, .before = cyear)
+
+    # Joining the ESS and Polity V data set by using the "cnt_year" column.
+
+    ESS_Polity_me <- left_join(Ess, Pol, by = "cnt_year")
+
+    # Removing unnecessary columns from the new data set.
+
+    ESS_Polity_me <- ESS_Polity_me %>% 
+      select( -c(2,16)) %>% 
+      rename( "Country" = "country.x")
+
+    head(ESS_Polity_me)
+    
+    ```
+
+    \(4\) Save the joined data *ESS_Polity* to your local directory using the following code. We will be using this joined data to explore visualization in future challenges.
+
+    ```{r}
+    # Saving the new created data set as .csv file for further use.
+
+    write_csv(ESS_Polity_me, "ESS_Polity.csv")
+
+    ```
+
+4.  **Describe the data structure of the newly joined data *ESS_Polity*. What is its dimension (# of rows and \# of columns)? What is its unit of observation? Compared to the original ESS_5 data, does the above data combination change the dimension and unit of observation?**
+
+    Ans: The newly joined ESS_Polity data set has 52458 rows and 18 columns in total. The unit of observation for this combined data set is individual respondents from a given country in the year 2010. The columns describe various attributes of these individuals related to their social behaviors, public opinions, and their country's political scenarios. We can reduce the number of observations in this data set, however, as the ESS data set is our primary table of study, I wanted to retrieve all of its observations by using left_join() instead of an inner_join(). As compared to the original ESS data set, the new ESS_Polity data set does change the dimension by adding new columns to it. These are the columns that we joined from the Polity V data set for our research purpose. Apart from this, the unit of observation in the new data set remains intact as from the original data set.
+
+    ```{r}
+    # Using functions to better understand the data set.
+
+    dim(ESS_Polity_me)
+    str(ESS_Polity_me)
+    ```
+
+5.  **(Optional) Suppose our focus is studying regimes and governments in different countries (Polity V data). Particularly, we are interested in the relationship between the average education level in each country and the level of democracy in that country. What is the primary and foreign data in this study? How will you combine the two data?**
+
+    Ans: The primary data set for the above-mentioned scenario will be the Polity V data set and the foreign data set will be the ESS data set. We can combine these data sets by using the country column as a key. However, for the ESS data set, we need to summarize the average level of education by grouping the respondents by their countries, and for the Polity V data set, we need to filter the year column such that it only has observations for 2010. We can use a left_join() since Polity V is our primary data set, however, I prefer using an inner_join() in order to filter out countries that do not have their average education level registered.
+
+    ```{r}
+    # Grouping and summarizing the average education for each country in the ESS data set.
+
+    Ess_V1 <- Ess %>% 
+      group_by(country) %>% 
+      summarise( avg_ed = mean(edu, na.rm = T))
+
+    # Filtering the rows in the Polity V data set to include only those from the year 2010.
+
+    Pol_V1 <- Pol %>% 
+      filter(year == "2010")
+
+    # Using the inner_join() function to merge the ESS_V1 and Pol_V1 data sets, retaining only the data that is common/shared between them.
+
+    Polity_ESS <- inner_join(Pol_V1, Ess_V1, by = "country")
+    
+    head(Polity_ESS)
+    ```
+
+## Part 2. Writing Your Own Functions
+
+Please use the joined data ***ESS_Polity*** in Part 1 and write a function to complete all the following tasks:
+
+\(1\) Estimate the range, average, and standard deviation of any given numeric-type (double or integer) columns.
+
+\(2\) Estimate the number of NAs and the number of unique values of any given column.
+
+\(3\) Test your function with any four columns of your choice.
+
+```{r}
+# Writing a function to calculate the range, average, and standard deviation of any given numeric type column.
+
+Rn_Avg_Sd <- function(x) {
+  range <- range(x, na.rm = T)
+  average <- mean(x, na.rm = T)
+  std_dev <- sd(x, na.rm = T)
+  return(list(range = range,average = average,standard_deviation = std_dev))
+}
+
+# Writing a function to calculate the number of NAs, and number of unique values in any given column.
+
+Na_Uniq <- function(x) {
+  No_Nas <- sum(is.na(x))
+  No_Uniq <- length(unique(x))
+  return(list(`Number of Nas` = No_Nas, `Number of Unique` = No_Uniq))
+}
+
+# Using the above created function on any 4 numeric type columns.
+
+Rn_Avg_Sd(ESS_Polity_me$vote)
+Rn_Avg_Sd(ESS_Polity_me$edu)
+Rn_Avg_Sd(ESS_Polity_me$income_10)
+Rn_Avg_Sd(ESS_Polity_me$age)
+
+# Using the above created function on any 4 columns.
+
+Na_Uniq(ESS_Polity_me$vote)
+Na_Uniq(ESS_Polity_me$Country)
+Na_Uniq(ESS_Polity_me$age)
+Na_Uniq(ESS_Polity_me$democ)
+```
+
+## Part 3. Practicing String Functions with Babynames
+
+1.  **Import the babynames data:**
+
+```{r}
+# Importing and viewing the data set.
+
+Baby <- read.csv("babynames.csv")
+head(Baby)
+```
+
+2.  **Use different string functions to answer the following questions:**
+
+    \(1\) Find the longest name using [count()](https://dplyr.tidyverse.org/reference/count.html) and a string function.
+
+    Ans: Among the names in this data set, the longest ones contain 15 letters each. In total, there are 37 distinct names, each with exactly 15 letters.
+
+    "Christophermich" "Johnchristopher" "Christopherjohn" "Mariadelrosario" "Mariadelosangel" "Franciscojavier" "Michaelchristop" "Ashleyelizabeth" "Christopherjame" "Christopherryan" "Kevinchristophe" "Seanchristopher" "Ryanchristopher" "Markchristopher" "Christopherpaul" "Laurenelizabeth" "Jonathanmichael" "Joshuaalexander" "Christiandaniel" "Christopherjose" "Christiananthon" "Christianmichae" "Christianjoseph" "Davidchristophe" "Jordanchristoph" "Hannahelizabeth" "Christianjoshua" "Christopheranth" "Matthewalexande" "Christopherdavi" "Christianalexan" "Jordanalexander" "Jaydenalexander" "Gabrielalexande" "Muhammadibrahim" "Muhammadmustafa" "Sophiaelizabeth"
+
+    \(2\) Use a string function to detect if the following names are present in the data:
+
+    "Ronaldo", "Messi", "Wayne", "Clarck", "Rick", and "Morty".
+
+    Ans: I employed the \`str_detect()\` function to identify the presence of the mentioned names in the dataset. This operation produced a considerably large logical vector. To ascertain if there was at least one occurrence of \`TRUE\` within this vector, I utilized the \`any()\` function for a more efficient and streamlined evaluation. I found that "Ronaldo", "Messi", "Wayne", "Rick", and "Morty" are all present in the data set except "Clarck".
+
+    \(3\) Create a column *LastName* with just one value, "LastName". Next, create another column *FullName,* by combing the strings of columns *name* and LastName, separating by a period. For example, a value in this new column should be like "Jacky.LastName".
+
+    \(4\) Find all "Elizabeth" in the data and replace "Elizabeth" with "Liz".
+
+```{r}
+# Finding the longest name using str_count() and max().
+
+max(str_count(Baby$Name))
+max(str_length(Baby$Name))
+
+# Finding and listing the unique longest names from the data set.
+
+Long_Names <- Baby %>% 
+  mutate( count = str_count(Baby$Name)) %>% 
+  filter( count == 15)
+unique(Long_Names$Name)
+
+
+
+# We can use the below given code template to search for each name individually.
+
+Pattern_match <- str_detect(Baby$Name, "^Messi$") # Type in each name individually.
+if(any(Pattern_match)){
+  result <- TRUE
+} else {
+  result <- FALSE
+}
+
+# We can define the names within a pattern vector and employ a loop to iterate through each of them, generating a vector that indicates the presence or absence of these patterns.
+
+Pattern <- c("^Ronaldo$", "^Messi$", "^Wayne$", "^Clarck$", "^Rick$", "^Morty$")
+
+x <- c() # Defining an empty vector.
+
+for (i in Pattern) {
+  Pattern_match <- str_detect(Baby$Name, i)
+  x <- append(x, any(Pattern_match))
+  }
+
+x  # Printing the vector.
+
+
+# Creating new columns for LastName and FullName by using mutate() and str_c().
+
+Baby <- Baby %>% 
+  mutate( LastName = "LastName") %>% 
+  relocate( LastName, .after = Name)
+Baby <- Baby %>% 
+  mutate( FullName = str_c(Name, LastName, sep = ".")) %>% 
+  relocate( FullName, .after = LastName)
+  
+# Replacing all names that contain "Elizabeth" with "Liz".
+
+Baby$Name <- str_replace_all(Baby$Name, "(?i)elizabeth", "Liz")
+
+head(Baby)
+Baby[Baby$Name == "Liz", ]
+
+```
+
+## Part 4. Clean data with import and string functions
+
+As mentioned in the last Challenge, the original version of the survey on attitudes toward Same-Sex Marriage in Australia is raw and untidy data. You can open it in Excel and take a look at it.
+
+The provided table includes estimates of the proportion of citizens choosing each of the four options, aggregated by Federal Electoral District, which are nested within one of 8 overarching Electoral Divisions.
+
+In this case, we are going to identify the desired structure early in the process because clever naming of variables makes it much easier for later analysis. We will skip reading in redundant data (proportions and "totals" columns), and then can identify four potentially distinct pieces of information. Three grouping variables: *Division* (in column 1), *District* (also in column 1), and citizen *Response* (yes, no, unclear, and non-response), plus one value: aggregated response *Count*.
+
+The ultimate goal is to use all the import and string functions we learned to generate data that looks like the data austrlia_data.csv we used in Challenge#2.
+
+The data cleaning process should follow the following two steps. (Tips: some functions you will be using: `mutate()`,`starts_with()`, `str_detect()`, `str_starts()`) `str_ends()`, `str_detect()`, [`fill()`](https://tidyr.tidyverse.org/reference/fill.html)).
+
+1.  Read in data, skipping unneeded columns and renaming variables.
+
+    ```{r}
+    # Reading the data set.
+    
+    Aus <- read_excel("australian_marriage_law_postal_survey_2017_-_response_final.xls", sheet = 3)
+    View(Aus)
+    
+    # Skipping unneeded columns and renaming variables.
+    
+    Aus <- Aus %>% 
+      select(- c(3,5,6,7,8,9,10,12,14,15,16))
+    Aus <- Aus %>% 
+      rename("District" = `Australian Bureau of Statistics`, "Yes"= ...2, "No" = ...4, "Illeligible" = ...11, "No Response" = ...13)
+
+    # Filtering unnecessary rows and NA rows.
+      
+    Aus <- Aus[-(1:6),]
+    Aus <-  Aus[-(174:184),]
+    Aus <- Aus %>% 
+      filter(!(is.na(District)))
+    Aus <- Aus %>% 
+      filter(!str_detect(District,"(Total)"))
+    
+    # Calculating aggregated votes count and creating a new column.
+    
+    Aus$Yes <- as.numeric(Aus$Yes)
+    Aus$No <- as.numeric(Aus$No)
+    Aus$Illeligible <- as.numeric(Aus$Illeligible)
+    Aus <- Aus %>% 
+      mutate(Count = Aus$Yes + Aus$No + Aus$Illeligible)
+    
+
+    head(Aus)
+
+    
+    ```
+
+2.  Create *Division* and *District* variables using `separate()` and `fill().` You will also use string functions to help you.
+
+    ```{r}
+    # Creating a new column for divisions and using fill() to impute the division names.
+    
+    Aus <- Aus %>% 
+      mutate(Division = str_extract(District, ".* Divisions"))
+    Aus <- Aus %>% 
+      fill(Division)
+    Aus <- Aus %>% 
+      filter( !str_detect(District, "Divisions$"))
+    Aus <- Aus %>% 
+      relocate( Division, .after = District)
+    
+    head(Aus)
+    
+    
+    
+    
+    
+    ```
